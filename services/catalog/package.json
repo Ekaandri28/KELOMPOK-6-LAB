@@ -1,0 +1,13 @@
+{
+  "name": "catalog-service",
+  "version": "1.0.0",
+  "description": "Layanan katalog produk kosmetik - harga normal dan harga kilat",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --experimental-sqlite index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}

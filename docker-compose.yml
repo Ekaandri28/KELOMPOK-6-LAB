@@ -1,0 +1,95 @@
+version: "3.9"
+
+services:
+  # ─────────────────────────────────────────────
+  # 1. catalog-service  – Port 3005
+  #    Kelola produk, harga normal, harga kilat
+  # ─────────────────────────────────────────────
+  catalog-service:
+    build: ./services/catalog
+    container_name: catalog-service
+    ports:
+      - "3005:3005"
+    environment:
+      PORT: 3005
+    volumes:
+      - catalog-data:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3005/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ─────────────────────────────────────────────
+  # 2. stock-service  – Port 3006
+  #    Kurangi & pulihkan stok secara aman
+  # ─────────────────────────────────────────────
+  stock-service:
+    build: ./services/stock
+    container_name: stock-service
+    ports:
+      - "3006:3006"
+    environment:
+      PORT: 3006
+    volumes:
+      - stock-data:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3006/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ─────────────────────────────────────────────
+  # 3. order-service  – Port 3007
+  #    Buat pesanan, hitung total, lacak status
+  # ─────────────────────────────────────────────
+  order-service:
+    build: ./services/order
+    container_name: order-service
+    ports:
+      - "3007:3007"
+    environment:
+      PORT: 3007
+      CATALOG_URL: http://catalog-service:3005
+      STOCK_URL: http://stock-service:3006
+    volumes:
+      - order-data:/app
+    depends_on:
+      catalog-service:
+        condition: service_healthy
+      stock-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3007/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ─────────────────────────────────────────────
+  # 4. live-service  – Port 3008
+  #    Sesi siaran, produk diangkat, countdown
+  # ─────────────────────────────────────────────
+  live-service:
+    build: ./services/live
+    container_name: live-service
+    ports:
+      - "3008:3008"
+    environment:
+      PORT: 3008
+    volumes:
+      - live-data:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3008/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  catalog-data:
+  stock-data:
+  order-data:
+  live-data:

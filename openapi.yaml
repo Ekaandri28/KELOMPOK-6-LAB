@@ -1,0 +1,816 @@
+openapi: "3.0.3"
+info:
+  title: "Live Shopping & Flash Sale Kosmetik – API v1"
+  description: |
+    Kontrak API untuk sistem microservices Live Shopping & Flash Sale Produk Kosmetik.
+    Terdiri dari 4 layanan: catalog, stock, order, dan live.
+    
+    Studi kasus kritis: **Stok produk tidak boleh terjual melebihi jumlah yang ada**,
+    walau ribuan orang menekan tombol beli bersamaan.
+  version: "1.0.0"
+  contact:
+    name: "Kelompok 6 – Praktikum Scalable Systems"
+
+servers:
+  - url: http://localhost:3005
+    description: catalog-service (lokal)
+  - url: http://localhost:3006
+    description: stock-service (lokal)
+  - url: http://localhost:3007
+    description: order-service (lokal)
+  - url: http://localhost:3008
+    description: live-service (lokal)
+
+tags:
+  - name: catalog
+    description: Kelola produk, harga normal, dan harga kilat
+  - name: stock
+    description: Kurangi stok secara aman dan pulihkan bila pesanan batal
+  - name: order
+    description: Buat pesanan, hitung total, dan lacak statusnya
+  - name: live
+    description: Kelola sesi siaran, produk yang diangkat, dan countdown promo
+
+# ============================================================
+# CATALOG SERVICE  (port 3005)
+# ============================================================
+paths:
+  /health:
+    get:
+      tags: [catalog]
+      summary: Health check layanan
+      operationId: getHealth
+      responses:
+        "200":
+          description: Layanan berjalan normal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /products:
+    get:
+      tags: [catalog]
+      summary: Daftar semua produk
+      operationId: listProducts
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter berdasarkan kategori (contoh: Lipstik, Skincare)
+        - name: flash_sale
+          in: query
+          schema:
+            type: boolean
+          description: Hanya tampilkan produk yang ada flash price-nya
+      responses:
+        "200":
+          description: Daftar produk berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Product"
+                  total:
+                    type: integer
+
+    post:
+      tags: [catalog]
+      summary: Tambah produk baru
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Produk berhasil ditambahkan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Product"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /products/{id}:
+    get:
+      tags: [catalog]
+      summary: Detail satu produk
+      operationId: getProduct
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Detail produk
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Product"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [catalog]
+      summary: Update seluruh data produk
+      operationId: updateProduct
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "200":
+          description: Produk berhasil diupdate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Product"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags: [catalog]
+      summary: Hapus produk
+      operationId: deleteProduct
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Produk berhasil dihapus
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /products/{id}/flash-price:
+    patch:
+      tags: [catalog]
+      summary: Set atau hapus harga kilat flash sale
+      operationId: setFlashPrice
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                flash_price:
+                  type: number
+                  nullable: true
+                  example: 45000
+      responses:
+        "200":
+          description: Harga kilat berhasil diperbarui
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Product"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+# ============================================================
+# STOCK SERVICE  (port 3006)
+# ============================================================
+  /stock:
+    get:
+      tags: [stock]
+      summary: Daftar semua stok produk
+      operationId: listStock
+      responses:
+        "200":
+          description: Daftar stok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Stock"
+                  total:
+                    type: integer
+
+    post:
+      tags: [stock]
+      summary: Inisialisasi stok produk baru
+      operationId: initStock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, quantity]
+              properties:
+                product_id:
+                  type: integer
+                  example: 11
+                quantity:
+                  type: integer
+                  example: 100
+      responses:
+        "201":
+          description: Stok berhasil diinisialisasi
+        "409":
+          description: Stok produk sudah ada
+
+  /stock/{productId}:
+    get:
+      tags: [stock]
+      summary: Stok satu produk
+      operationId: getStock
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Data stok produk
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Stock"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /stock/{productId}/reduce:
+    put:
+      tags: [stock]
+      summary: Kurangi stok (KRITIS – operasi atomic)
+      description: |
+        **Endpoint kritis untuk flash sale.** Menggunakan transaksi database
+        untuk memastikan stok tidak minus walau ribuan request bersamaan.
+      operationId: reduceStock
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: integer
+                  minimum: 1
+                  example: 1
+      responses:
+        "200":
+          description: Stok berhasil dikurangi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Stock"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Stok tidak mencukupi
+
+  /stock/{productId}/restore:
+    put:
+      tags: [stock]
+      summary: Kembalikan stok (saat pesanan dibatalkan)
+      operationId: restoreStock
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: integer
+                  minimum: 1
+                  example: 1
+      responses:
+        "200":
+          description: Stok berhasil dikembalikan
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+# ============================================================
+# ORDER SERVICE  (port 3007)
+# ============================================================
+  /orders:
+    get:
+      tags: [order]
+      summary: Daftar semua pesanan
+      operationId: listOrders
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, paid, cancelled]
+      responses:
+        "200":
+          description: Daftar pesanan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Order"
+                  total:
+                    type: integer
+
+    post:
+      tags: [order]
+      summary: Buat pesanan baru (KRITIS)
+      description: |
+        **Endpoint kritis.** Saat membuat pesanan:
+        1. Ambil harga dari catalog-service (gunakan flash_price jika ada)
+        2. Kurangi stok di stock-service (atomic)
+        3. Rollback stok jika ada item yang gagal
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+            example:
+              customer_name: "Siti Aminah"
+              customer_email: "siti@example.com"
+              items:
+                - product_id: 1
+                  qty: 2
+                - product_id: 3
+                  qty: 1
+      responses:
+        "201":
+          description: Pesanan berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Produk tidak ditemukan
+        "409":
+          description: Stok tidak mencukupi
+
+  /orders/{id}:
+    get:
+      tags: [order]
+      summary: Detail satu pesanan
+      operationId: getOrder
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Detail pesanan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /orders/{id}/status:
+    patch:
+      tags: [order]
+      summary: Update status pesanan
+      description: Jika status diubah ke `cancelled`, stok otomatis dikembalikan.
+      operationId: updateOrderStatus
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [pending, paid, cancelled]
+      responses:
+        "200":
+          description: Status pesanan berhasil diperbarui
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+# ============================================================
+# LIVE SERVICE  (port 3008)
+# ============================================================
+  /sessions:
+    get:
+      tags: [live]
+      summary: Daftar semua sesi siaran
+      operationId: listSessions
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [scheduled, live, ended]
+      responses:
+        "200":
+          description: Daftar sesi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Session"
+
+    post:
+      tags: [live]
+      summary: Buat sesi siaran baru
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  example: "Flash Sale Lipstik Malam Ini!"
+                promo_duration_sec:
+                  type: integer
+                  default: 300
+                  example: 180
+      responses:
+        "201":
+          description: Sesi berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Session"
+
+  /sessions/{id}:
+    get:
+      tags: [live]
+      summary: Detail sesi siaran
+      operationId: getSession
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Detail sesi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Session"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sessions/{id}/status:
+    patch:
+      tags: [live]
+      summary: Mulai atau akhiri sesi siaran
+      operationId: updateSessionStatus
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [scheduled, live, ended]
+      responses:
+        "200":
+          description: Status sesi berhasil diubah
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sessions/{id}/feature:
+    patch:
+      tags: [live]
+      summary: Angkat produk ke layar saat siaran (set featured product)
+      description: Mengatur produk mana yang sedang disorot beserta harga kilat dan durasi countdown.
+      operationId: featureProduct
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [featured_product_id]
+              properties:
+                featured_product_id:
+                  type: integer
+                  example: 1
+                flash_price:
+                  type: number
+                  nullable: true
+                  example: 39000
+                promo_duration_sec:
+                  type: integer
+                  example: 120
+      responses:
+        "200":
+          description: Produk berhasil diangkat ke layar
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sessions/{id}/countdown:
+    get:
+      tags: [live]
+      summary: Hitung mundur promo aktif (KRITIS)
+      description: |
+        **Endpoint kritis untuk mobile.** Menampilkan sisa waktu promo flash sale
+        yang sedang berjalan, sehingga tampilan di layar pembeli selalu update.
+      operationId: getCountdown
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Informasi countdown promo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CountdownResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+# ============================================================
+# COMPONENTS
+# ============================================================
+components:
+  parameters:
+    ProductId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: ID produk
+    OrderId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: ID pesanan
+    SessionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: ID sesi siaran
+
+  responses:
+    NotFound:
+      description: Resource tidak ditemukan
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    BadRequest:
+      description: Request tidak valid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        service:
+          type: string
+        status:
+          type: string
+          example: ok
+        port:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          example: "Lipstik Matte Rouge"
+        category:
+          type: string
+          example: "Lipstik"
+        normal_price:
+          type: number
+          example: 85000
+        flash_price:
+          type: number
+          nullable: true
+          example: 45000
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ProductInput:
+      type: object
+      required: [name, category, normal_price]
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        normal_price:
+          type: number
+        flash_price:
+          type: number
+          nullable: true
+        description:
+          type: string
+
+    Stock:
+      type: object
+      properties:
+        product_id:
+          type: integer
+        quantity:
+          type: integer
+          example: 100
+        updated_at:
+          type: string
+          format: date-time
+
+    OrderItem:
+      type: object
+      properties:
+        product_id:
+          type: integer
+        name:
+          type: string
+        qty:
+          type: integer
+        unit_price:
+          type: number
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        total_price:
+          type: number
+        status:
+          type: string
+          enum: [pending, paid, cancelled]
+        customer_name:
+          type: string
+        customer_email:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    OrderInput:
+      type: object
+      required: [customer_name, customer_email, items]
+      properties:
+        customer_name:
+          type: string
+        customer_email:
+          type: string
+          format: email
+        items:
+          type: array
+          items:
+            type: object
+            required: [product_id, qty]
+            properties:
+              product_id:
+                type: integer
+              qty:
+                type: integer
+                minimum: 1
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        status:
+          type: string
+          enum: [scheduled, live, ended]
+        featured_product_id:
+          type: integer
+          nullable: true
+        flash_price:
+          type: number
+          nullable: true
+        promo_duration_sec:
+          type: integer
+        promo_start_time:
+          type: string
+          nullable: true
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    CountdownResponse:
+      type: object
+      properties:
+        session_id:
+          type: integer
+        featured_product_id:
+          type: integer
+          nullable: true
+        flash_price:
+          type: number
+          nullable: true
+        countdown:
+          type: object
+          nullable: true
+          properties:
+            remaining_seconds:
+              type: integer
+              example: 127
+            ends_at:
+              type: string
+              format: date-time

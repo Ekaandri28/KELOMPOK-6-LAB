@@ -1,0 +1,14 @@
+{
+  "name": "order-service",
+  "version": "1.0.0",
+  "description": "Layanan pesanan - buat pesanan, hitung total, lacak status",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --experimental-sqlite index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "axios": "^1.6.7"
+  }
+}

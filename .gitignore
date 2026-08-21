@@ -1,0 +1,16 @@
+# Node.js
+node_modules/
+npm-debug.log*
+
+# SQLite database files (dibuat saat runtime)
+*.db
+*.db-shm
+*.db-wal
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
