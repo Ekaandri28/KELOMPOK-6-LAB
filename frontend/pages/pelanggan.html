@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Shopping Kosmetik</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <style>
+    .live-banner {
+      background: linear-gradient(135deg, #8f3f52, #7c5c8a);
+      color: var(--white); border-radius: var(--radius);
+      padding: 18px 22px; margin-bottom: 22px;
+      display: flex; align-items: center; gap: 16px;
+      box-shadow: var(--shadow);
+    }
+    .live-banner .live-info { flex: 1; }
+    .live-banner h2 { font-size: 1.15rem; margin-bottom: 3px; font-weight: 700; }
+    .live-banner p  { font-size: .82rem; opacity: .8; }
+    .filter-bar {
+      display: flex; gap: 10px; flex-wrap: wrap;
+      align-items: center; margin-bottom: 20px;
+    }
+    .filter-bar select, .filter-bar input {
+      padding: 8px 12px; border-radius: var(--radius-sm);
+      border: 1.5px solid var(--border); font-size: .875rem;
+      background: var(--surface); color: var(--gray-800);
+    }
+    .filter-bar select:focus, .filter-bar input:focus {
+      outline: none; border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(194,99,122,.12);
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="brand">💄 KosmetikLive <span>Live Shopping</span></div>
+  <div class="nav-links">
+    <span id="user-greeting" style="opacity:.8;font-size:.85rem"></span>
+    <a href="cart.html">🛒 Keranjang <span class="badge" id="cart-count">0</span></a>
+    <a href="pesanan.html">📦 Pesanan Saya</a>
+    <button onclick="logout()">Keluar</button>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- LIVE BANNER + COUNTDOWN -->
+  <div id="live-banner-area"></div>
+
+  <!-- FILTER -->
+  <div class="filter-bar">
+    <select id="filter-cat" onchange="filterProduk()">
+      <option value="">Semua Kategori</option>
+      <option>Lip Cream</option>
+      <option>Lip Serum</option>
+      <option>Lip Balm</option>
+      <option>Lip Tint</option>
+      <option>Lip Gloss</option>
+    </select>
+    <label style="display:flex;align-items:center;gap:6px;font-size:.9rem">
+      <input type="checkbox" id="filter-flash" onchange="filterProduk()" />
+      Flash Sale saja 🔥
+    </label>
+    <input type="text" id="filter-search" placeholder="Cari produk..." oninput="filterProduk()" style="flex:1;min-width:180px" />
+  </div>
+
+  <div id="alert-area"></div>
+
+  <!-- PRODUK GRID -->
+  <div class="grid-3" id="produk-grid">
+    <div style="text-align:center;color:#999;padding:48px;grid-column:1/-1">Memuat produk...</div>
+  </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script>
+  // ── AUTH CHECK ───────────────────────────────────────────────
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  if (localStorage.getItem('role') !== 'pelanggan') window.location.href = '../index.html';
+  document.getElementById('user-greeting').textContent = 'Halo, ' + (user.name || 'Pelanggan');
+
+  function logout() {
+    localStorage.removeItem('role');
+    localStorage.removeItem('user');
+    window.location.href = '../index.html';
+  }
+
+  // ── CART ─────────────────────────────────────────────────────
+  function getCart() { return JSON.parse(localStorage.getItem('cart') || '[]'); }
+  function saveCart(c) { localStorage.setItem('cart', JSON.stringify(c)); updateCartBadge(); }
+  function updateCartBadge() {
+    const total = getCart().reduce((s, i) => s + i.qty, 0);
+    document.getElementById('cart-count').textContent = total;
+  }
+
+  function addToCart(product, stockQty) {
+    const cart = getCart();
+    const existing = cart.find(i => i.product_id === product.id);
+    const currentQty = existing ? existing.qty : 0;
+    if (currentQty >= stockQty) {
+      showAlert('Stok tidak mencukupi!');
+      return;
+    }
+    if (existing) existing.qty++;
+    else cart.push({
+      product_id:   product.id,
+      name:         product.name,
+      category:     product.category,
+      unit_price:   product.flash_price || product.normal_price,
+      normal_price: product.normal_price,
+      flash_price:  product.flash_price,
+      qty:          1,
+    });
+    saveCart(cart);
+    showAlert(`${product.name} ditambahkan ke keranjang! 🛒`, 'success');
+  }
+
+  // ── ALERT ────────────────────────────────────────────────────
+  function showAlert(msg, type = 'error') {
+    const el = document.getElementById('alert-area');
+    el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+    setTimeout(() => el.innerHTML = '', 3500);
+  }
+
+  // ── FORMAT ───────────────────────────────────────────────────
+  const fmt = n => 'Rp ' + Number(n).toLocaleString('id-ID');
+
+  // Kategori sesuai data aktual
+  const emojiKat = {
+    'Lip Cream':'💄', 'Lip Serum':'💧', 'Lip Balm':'🫧',
+    'Lip Tint':'🌸',  'Lip Gloss':'✨',  'Lainnya':'🛍️',
+    // legacy
+    'Lipstik':'💄', 'Foundation':'🫧', 'Skincare':'🧴',
+    'Mata':'👁️', 'Pipi':'🌸', 'Setting':'✨', 'Primer':'🫙',
+  };
+
+  function getProdukImage(p) {
+    // Prioritas: image_url dari database → emoji fallback
+    return p.image_url || null;
+  }
+
+  // ── LIVE BANNER ──────────────────────────────────────────────
+  let countdownInterval = null;
+  async function loadLiveBanner() {
+    try {
+      const res  = await LiveAPI.getSessions('live');
+      const list = res.data || [];
+      if (!list.length) return;
+      const sesi = list[0];
+      const cdRes = await LiveAPI.getCountdown(sesi.id);
+      const cd = cdRes.countdown;
+
+      let countdownHTML = '';
+      if (cd && cd.remaining_seconds > 0) {
+        countdownHTML = `
+          <div class="countdown-box" style="min-width:180px">
+            <div class="countdown-label">⏱ Flash Sale Berakhir Dalam</div>
+            <div class="countdown-timer" id="cd-timer">${formatSeconds(cd.remaining_seconds)}</div>
+            ${sesi.featured_product_id ? `<div class="countdown-product">Produk #${sesi.featured_product_id} · ${fmt(sesi.flash_price||0)}</div>` : ''}
+          </div>`;
+        startCountdown(cd.remaining_seconds);
+      }
+
+      document.getElementById('live-banner-area').innerHTML = `
+        <div class="live-banner">
+          <div style="font-size:2.5rem">📺</div>
+          <div class="live-info">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span class="live-badge">● LIVE</span>
+            </div>
+            <h2>${sesi.title}</h2>
+            <p>Tonton siaran langsung dan dapatkan penawaran terbaik! Klik produk untuk beli sekarang.</p>
+          </div>
+          ${countdownHTML}
+        </div>`;
+    } catch(e) {
+      // Tidak ada sesi live, tidak tampilkan banner
+    }
+  }
+
+  function formatSeconds(s) {
+    const m = Math.floor(s / 60).toString().padStart(2,'0');
+    const sec = (s % 60).toString().padStart(2,'0');
+    return `${m}:${sec}`;
+  }
+
+  function startCountdown(initial) {
+    if (countdownInterval) clearInterval(countdownInterval);
+    let rem = initial;
+    countdownInterval = setInterval(() => {
+      rem--;
+      const el = document.getElementById('cd-timer');
+      if (el) el.textContent = formatSeconds(Math.max(rem, 0));
+      if (rem <= 0) clearInterval(countdownInterval);
+    }, 1000);
+  }
+
+  // ── PRODUK ───────────────────────────────────────────────────
+  let allProduk = [];
+  let stockMap  = {};
+
+  async function loadProduk() {
+    try {
+      const [prodRes, stokRes] = await Promise.all([
+        CatalogAPI.getAll(),
+        StockAPI.getAll().catch(() => ({ data: [] })),
+      ]);
+      allProduk = prodRes.data || [];
+      (stokRes.data || []).forEach(s => { stockMap[s.product_id] = s.quantity; });
+      renderProduk(allProduk);
+    } catch (e) {
+      document.getElementById('produk-grid').innerHTML =
+        `<div style="color:var(--red);grid-column:1/-1;text-align:center;padding:32px">Gagal memuat produk: ${e.message}<br/>Pastikan catalog-service berjalan di port 3005.</div>`;
+    }
+  }
+
+  function filterProduk() {
+    const cat    = document.getElementById('filter-cat').value;
+    const flash  = document.getElementById('filter-flash').checked;
+    const search = document.getElementById('filter-search').value.toLowerCase();
+    const filtered = allProduk.filter(p => {
+      if (cat   && p.category !== cat) return false;
+      if (flash && !p.flash_price)     return false;
+      if (search && !p.name.toLowerCase().includes(search) && !p.category.toLowerCase().includes(search)) return false;
+      return true;
+    });
+    renderProduk(filtered);
+  }
+
+  function renderProduk(list) {
+    const grid = document.getElementById('produk-grid');
+    if (!list.length) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🔍</div><p>Produk tidak ditemukan</p></div>';
+      return;
+    }
+    grid.innerHTML = list.map(p => {
+      const stok   = stockMap[p.id] ?? null;
+      const habis  = stok === 0;
+      const rendah = stok !== null && stok > 0 && stok <= 5;
+      const imgUrl = getProdukImage(p);
+      const emoji  = emojiKat[p.category] || '✨';
+      const imgHTML = imgUrl
+        ? `<img src="${imgUrl}" alt="${p.name}"
+              style="width:100%;height:100%;object-fit:cover;display:block"
+              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+           <div style="display:none;width:100%;height:100%;align-items:center;justify-content:center;font-size:2.8rem">${emoji}</div>`
+        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2.8rem">${emoji}</div>`;
+      return `
+        <div class="product-card">
+          <div class="product-img" style="background:linear-gradient(135deg,var(--pink-light),var(--purple-light));padding:0;height:170px;overflow:hidden">
+            ${imgHTML}
+          </div>
+          <div class="product-body">
+            <div class="product-name">${p.name}</div>
+            <div><span class="product-category">${emoji} ${p.category}</span></div>
+            <div class="product-price">
+              ${p.flash_price
+                ? `<span class="flash-label">FLASH</span>
+                   <span class="flash-price">${fmt(p.flash_price)}</span>
+                   <span class="normal-price strikethrough">${fmt(p.normal_price)}</span>`
+                : `<span class="normal-price" style="font-weight:600;font-size:1rem;color:var(--gray-800)">${fmt(p.normal_price)}</span>`}
+            </div>
+            ${stok !== null
+              ? `<div class="stock-info ${rendah ? 'low' : ''}">${habis ? '❌ Stok habis' : rendah ? `⚠️ Sisa ${stok} pcs` : `Stok: ${stok} pcs`}</div>`
+              : ''}
+            ${p.description ? `<div style="font-size:.78rem;color:var(--gray-500);line-height:1.4">${p.description}</div>` : ''}
+            <button class="btn-add-cart" onclick='addToCart(${JSON.stringify(p)}, ${stok??9999})' ${habis ? 'disabled' : ''}>
+              ${habis ? 'Stok Habis' : '+ Tambah ke Keranjang'}
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── INIT ─────────────────────────────────────────────────────
+  updateCartBadge();
+  loadLiveBanner();
+  loadProduk();
+  // Refresh live banner setiap 30 detik
+  setInterval(loadLiveBanner, 30000);
+</script>
+</body>
+</html>

@@ -24,8 +24,10 @@ db.exec(`
 const count = db.prepare('SELECT COUNT(*) as c FROM stock').get();
 if (count.c === 0) {
   const insert = db.prepare('INSERT INTO stock (product_id, quantity) VALUES (?, ?)');
+  // Stok bervariasi agar lebih realistis
+  const initialStocks = [47, 12, 83, 5, 120, 30, 68, 3, 95, 21];
   for (let i = 1; i <= 10; i++) {
-    insert.run(i, 100); // Stok awal 100 per produk
+    insert.run(i, initialStocks[i - 1]);
   }
   console.log('[stock] Seed stok awal berhasil');
 }
@@ -65,38 +67,33 @@ app.post('/stock', (req, res) => {
   res.status(201).json({ data: stock });
 });
 
-// PUT /stock/:productId/reduce  – kurangi stok (ATOMIC, aman untuk high concurrency)
+// PUT /stock/:productId/reduce  – kurangi stok (ATOMIC — UPDATE bersyarat, tanpa jendela race)
 app.put('/stock/:productId/reduce', (req, res) => {
-  const { amount } = req.body;
-  if (!amount || amount <= 0) {
-    return res.status(400).json({ error: 'Field amount harus lebih dari 0' });
+  const amount = Number(req.body.amount);
+  if (!Number.isInteger(amount) || amount <= 0) {
+    return res.status(400).json({ error: { code: 'INPUT_TIDAK_VALID', message: 'amount harus bilangan bulat lebih dari 0' } });
   }
 
-  // Gunakan transaksi SQL eksplisit untuk operasi atomic
-  try {
-    db.exec('BEGIN IMMEDIATE');
+  // ✅ POLA BENAR: syarat (quantity >= amount) diperiksa di dalam WHERE saat UPDATE.
+  // Tidak ada jendela antara baca dan tulis — database memutuskan atomik.
+  // Berbeda dari pola SALAH (SELECT dulu → cek di JS → UPDATE terpisah) yang rentan race condition.
+  const result = db.prepare(`
+    UPDATE stock
+    SET quantity = quantity - ?, updated_at = datetime('now')
+    WHERE product_id = ? AND quantity >= ?
+  `).run(amount, req.params.productId, amount);
+
+  if (result.changes === 0) {
+    // Tidak ada baris yang ter-update — cek apakah produk ada atau stok kurang
     const stock = db.prepare('SELECT * FROM stock WHERE product_id = ?').get(req.params.productId);
     if (!stock) {
-      db.exec('ROLLBACK');
-      return res.status(404).json({ error: 'Stok produk tidak ditemukan' });
+      return res.status(404).json({ error: { code: 'STOK_TIDAK_ADA', message: 'Stok produk tidak ditemukan' } });
     }
-    if (stock.quantity < amount) {
-      db.exec('ROLLBACK');
-      return res.status(409).json({ error: 'Stok tidak mencukupi' });
-    }
-    db.prepare(`
-      UPDATE stock
-      SET quantity = quantity - ?, updated_at = datetime('now')
-      WHERE product_id = ?
-    `).run(amount, req.params.productId);
-    db.exec('COMMIT');
-
-    const updated = db.prepare('SELECT * FROM stock WHERE product_id = ?').get(req.params.productId);
-    res.json({ data: updated, message: `Stok berhasil dikurangi ${amount}` });
-  } catch (err) {
-    try { db.exec('ROLLBACK'); } catch (_) {}
-    res.status(500).json({ error: err.message });
+    return res.status(409).json({ error: { code: 'STOK_HABIS', message: 'Stok tidak mencukupi' } });
   }
+
+  const updated = db.prepare('SELECT * FROM stock WHERE product_id = ?').get(req.params.productId);
+  res.json({ data: updated, message: `Stok berhasil dikurangi ${amount}` });
 });
 
 // PUT /stock/:productId/restore  – kembalikan stok (saat pesanan dibatalkan)

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dasbor Admin — Live Shopping Kosmetik</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="brand">💄 KosmetikLive <span>Admin Panel</span></div>
+  <div class="nav-links">
+    <span id="admin-name" style="opacity:.8;font-size:.85rem"></span>
+    <button onclick="logout()">Keluar</button>
+  </div>
+</nav>
+
+<div class="container">
+  <!-- STATS -->
+  <div class="stats-grid" id="stats-grid">
+    <div class="stat-card"><div class="stat-value" id="stat-produk">—</div><div class="stat-label">Total Produk</div></div>
+    <div class="stat-card purple"><div class="stat-value" id="stat-stok">—</div><div class="stat-label">Total Stok</div></div>
+    <div class="stat-card green"><div class="stat-value" id="stat-pesanan">—</div><div class="stat-label">Total Pesanan</div></div>
+    <div class="stat-card red"><div class="stat-value" id="stat-live">—</div><div class="stat-label">Sesi Live Aktif</div></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab('produk')">Katalog Produk</button>
+    <button class="tab-btn" onclick="showTab('stok')">Stok</button>
+    <button class="tab-btn" onclick="showTab('live')">Sesi Live</button>
+    <button class="tab-btn" onclick="showTab('pesanan')">Pesanan</button>
+  </div>
+
+  <div id="alert-area"></div>
+
+  <!-- ═══════════ TAB: PRODUK ═══════════ -->
+  <div id="tab-produk" class="tab-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="page-title" style="margin:0">Katalog Produk Kosmetik</div>
+      <button class="btn btn-primary" onclick="openModal('modal-produk')">+ Tambah Produk</button>
+    </div>
+    <div class="table-wrap card">
+      <table id="table-produk">
+        <thead><tr><th>ID</th><th>Nama</th><th>Kategori</th><th>Harga Normal</th><th>Harga Kilat</th><th>Aksi</th></tr></thead>
+        <tbody id="tbody-produk"><tr><td colspan="6" style="text-align:center;color:#999">Memuat data...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: STOK ═══════════ -->
+  <div id="tab-stok" class="tab-content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="page-title" style="margin:0">Manajemen Stok</div>
+      <button class="btn btn-primary" onclick="openModal('modal-init-stok')">+ Init Stok</button>
+    </div>
+    <div class="table-wrap card">
+      <table>
+        <thead><tr><th>Product ID</th><th>Nama Produk</th><th>Stok Tersedia</th><th>Update Terakhir</th><th>Aksi</th></tr></thead>
+        <tbody id="tbody-stok"><tr><td colspan="5" style="text-align:center;color:#999">Memuat data...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: LIVE ═══════════ -->
+  <div id="tab-live" class="tab-content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="page-title" style="margin:0">Sesi Siaran Live</div>
+      <button class="btn btn-primary" onclick="openModal('modal-sesi')">+ Buat Sesi</button>
+    </div>
+    <div class="grid-2" id="grid-sesi">
+      <div style="text-align:center;color:#999;padding:32px">Memuat sesi...</div>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: PESANAN ═══════════ -->
+  <div id="tab-pesanan" class="tab-content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="page-title" style="margin:0">Daftar Pesanan</div>
+      <select id="filter-status" onchange="loadPesanan()" class="btn btn-outline btn-sm">
+        <option value="">Semua Status</option>
+        <option value="pending">Pending</option>
+        <option value="paid">Paid</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+    <div class="table-wrap card">
+      <table>
+        <thead><tr><th>ID</th><th>Pelanggan</th><th>Total</th><th>Status</th><th>Waktu</th><th>Aksi</th></tr></thead>
+        <tbody id="tbody-pesanan"><tr><td colspan="6" style="text-align:center;color:#999">Memuat data...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL: TAMBAH/EDIT PRODUK ═══════════ -->
+<div class="modal-overlay" id="modal-produk">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-produk')">✕</button>
+    <div class="modal-title" id="modal-produk-title">Tambah Produk</div>
+    <input type="hidden" id="produk-id" />
+    <div class="form-group"><label>Nama Produk</label><input id="p-name" placeholder="Lipstik Matte Rouge" required /></div>
+    <div class="form-group">
+      <label>Kategori</label>
+      <select id="p-category">
+        <option>Lip Cream</option><option>Lip Serum</option><option>Lip Balm</option>
+        <option>Lip Tint</option><option>Lip Gloss</option><option>Lainnya</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Harga Normal (Rp)</label><input type="number" id="p-normal-price" placeholder="85000" required /></div>
+    <div class="form-group"><label>Harga Kilat / Flash Sale (Rp) — opsional</label><input type="number" id="p-flash-price" placeholder="Kosongkan jika tidak ada" /></div>
+    <div class="form-group"><label>Deskripsi</label><textarea id="p-desc" rows="2" placeholder="Deskripsi produk..."></textarea></div>
+    <div class="form-group"><label>URL Gambar — opsional</label><input type="url" id="p-image-url" placeholder="https://..." /></div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveProduk()">Simpan Produk</button>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL: INIT STOK ═══════════ -->
+<div class="modal-overlay" id="modal-init-stok">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-init-stok')">✕</button>
+    <div class="modal-title">Inisialisasi Stok Produk</div>
+    <div class="form-group"><label>Product ID</label><input type="number" id="s-product-id" placeholder="1" required /></div>
+    <div class="form-group"><label>Jumlah Stok</label><input type="number" id="s-quantity" placeholder="100" required /></div>
+    <button class="btn btn-primary" style="width:100%" onclick="initStok()">Inisialisasi Stok</button>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL: BUAT SESI LIVE ═══════════ -->
+<div class="modal-overlay" id="modal-sesi">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-sesi')">✕</button>
+    <div class="modal-title">Buat Sesi Siaran</div>
+    <div class="form-group"><label>Judul Sesi</label><input id="sesi-title" placeholder="Flash Sale Lipstik Malam Ini!" required /></div>
+    <div class="form-group"><label>Durasi Promo (detik)</label><input type="number" id="sesi-duration" value="300" /></div>
+    <button class="btn btn-primary" style="width:100%" onclick="createSesi()">Buat Sesi</button>
+  </div>
+</div>
+
+<!-- ═══════════ MODAL: FEATURE PRODUK ═══════════ -->
+<div class="modal-overlay" id="modal-feature">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-feature')">✕</button>
+    <div class="modal-title">Angkat Produk ke Layar</div>
+    <input type="hidden" id="feature-sesi-id" />
+    <div class="form-group"><label>Product ID</label><input type="number" id="feature-product-id" placeholder="1" /></div>
+    <div class="form-group"><label>Harga Kilat (Rp)</label><input type="number" id="feature-flash-price" placeholder="39000" /></div>
+    <div class="form-group"><label>Durasi Countdown (detik)</label><input type="number" id="feature-duration" value="120" /></div>
+    <button class="btn btn-primary" style="width:100%" onclick="featureProduct()">Angkat ke Layar</button>
+  </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script>
+  // ── AUTH CHECK ───────────────────────────────────────────────
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  if (localStorage.getItem('role') !== 'admin') window.location.href = '../index.html';
+  document.getElementById('admin-name').textContent = user.name || 'Admin';
+
+  function logout() {
+    localStorage.removeItem('role');
+    localStorage.removeItem('user');
+    window.location.href = '../index.html';
+  }
+
+  // ── TABS ─────────────────────────────────────────────────────
+  function showTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + tab).style.display = '';
+    event.target.classList.add('active');
+    if (tab === 'produk')  loadProduk();
+    if (tab === 'stok')    loadStok();
+    if (tab === 'live')    loadSesi();
+    if (tab === 'pesanan') loadPesanan();
+  }
+
+  // ── ALERT ────────────────────────────────────────────────────
+  function showAlert(msg, type = 'error') {
+    const el = document.getElementById('alert-area');
+    el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+    setTimeout(() => el.innerHTML = '', 4000);
+  }
+
+  // ── MODAL ────────────────────────────────────────────────────
+  function openModal(id) { document.getElementById(id).classList.add('active'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+  // ── FORMAT ───────────────────────────────────────────────────
+  const fmt = n => 'Rp ' + Number(n).toLocaleString('id-ID');
+
+  // ── KATEGORI EMOJI ────────────────────────────────────────────
+  const emojiKat = {
+    'Lip Cream':'💄', 'Lip Serum':'💧', 'Lip Balm':'🫧',
+    'Lip Tint':'🌸',  'Lip Gloss':'✨',  'Lainnya':'🛍️',
+    // legacy
+    'Lipstik':'💄', 'Foundation':'🫧', 'Skincare':'🧴',
+    'Mata':'👁️', 'Pipi':'🌸', 'Setting':'✨', 'Primer':'🫙',
+  };
+
+  // ════════════ PRODUK ════════════
+  let allProduk = [];
+  async function loadProduk() {
+    try {
+      const res = await CatalogAPI.getAll();
+      allProduk = res.data || [];
+      document.getElementById('stat-produk').textContent = allProduk.length;
+      const tbody = document.getElementById('tbody-produk');
+      if (!allProduk.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999">Belum ada produk</td></tr>';
+        return;
+      }
+      tbody.innerHTML = allProduk.map(p => `
+        <tr>
+          <td>${p.id}</td>
+          <td>${emojiKat[p.category]||'✨'} ${p.name}</td>
+          <td><span class="status-badge status-scheduled">${p.category}</span></td>
+          <td>${fmt(p.normal_price)}</td>
+          <td>${p.flash_price ? `<span style="color:var(--red);font-weight:700">${fmt(p.flash_price)}</span>` : '<span style="color:#999">—</span>'}</td>
+          <td style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="editProduk(${p.id})">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteProduk(${p.id})">Hapus</button>
+          </td>
+        </tr>`).join('');
+    } catch (e) {
+      document.getElementById('tbody-produk').innerHTML =
+        `<tr><td colspan="6" style="color:var(--red);text-align:center">Gagal memuat: ${e.message}</td></tr>`;
+    }
+  }
+
+  function editProduk(id) {
+    const p = allProduk.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('produk-id').value = p.id;
+    document.getElementById('p-name').value = p.name;
+    document.getElementById('p-category').value = p.category;
+    document.getElementById('p-normal-price').value = p.normal_price;
+    document.getElementById('p-flash-price').value = p.flash_price || '';
+    document.getElementById('p-desc').value = p.description || '';
+    document.getElementById('p-image-url').value = p.image_url || '';
+    document.getElementById('modal-produk-title').textContent = 'Edit Produk';
+    openModal('modal-produk');
+  }
+
+  async function saveProduk() {
+    const id = document.getElementById('produk-id').value;
+    const body = {
+      name:         document.getElementById('p-name').value,
+      category:     document.getElementById('p-category').value,
+      normal_price: Number(document.getElementById('p-normal-price').value),
+      flash_price:  document.getElementById('p-flash-price').value ? Number(document.getElementById('p-flash-price').value) : null,
+      description:  document.getElementById('p-desc').value,
+      image_url:    document.getElementById('p-image-url').value || null,
+    };
+    try {
+      if (id) await CatalogAPI.update(id, body);
+      else    await CatalogAPI.create(body);
+      closeModal('modal-produk');
+      document.getElementById('produk-id').value = '';
+      document.getElementById('modal-produk-title').textContent = 'Tambah Produk';
+      showAlert('Produk berhasil disimpan!', 'success');
+      loadProduk();
+    } catch (e) { showAlert('Gagal menyimpan: ' + e.message); }
+  }
+
+  async function deleteProduk(id) {
+    if (!confirm('Hapus produk ini?')) return;
+    try {
+      await CatalogAPI.delete(id);
+      showAlert('Produk dihapus.', 'success');
+      loadProduk();
+    } catch (e) { showAlert('Gagal hapus: ' + e.message); }
+  }
+
+  // ════════════ STOK ════════════
+  async function loadStok() {
+    try {
+      const [stokRes, prodRes] = await Promise.all([StockAPI.getAll(), CatalogAPI.getAll()]);
+      const stokList = stokRes.data || [];
+      const prodMap  = Object.fromEntries((prodRes.data || []).map(p => [p.id, p.name]));
+      const totalStok = stokList.reduce((s, x) => s + x.quantity, 0);
+      document.getElementById('stat-stok').textContent = totalStok;
+      const tbody = document.getElementById('tbody-stok');
+      if (!stokList.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999">Belum ada data stok</td></tr>';
+        return;
+      }
+      tbody.innerHTML = stokList.map(s => `
+        <tr>
+          <td>${s.product_id}</td>
+          <td>${prodMap[s.product_id] || '—'}</td>
+          <td><span style="font-weight:700;color:${s.quantity < 10 ? 'var(--red)' : 'var(--green)'}">${s.quantity}</span>${s.quantity < 10 ? ' ⚠️' : ''}</td>
+          <td>${s.updated_at ? new Date(s.updated_at).toLocaleString('id-ID') : '—'}</td>
+          <td style="display:flex;gap:6px">
+            <button class="btn btn-success btn-sm" onclick="restoreStok(${s.product_id})">+Restore</button>
+          </td>
+        </tr>`).join('');
+    } catch (e) {
+      document.getElementById('tbody-stok').innerHTML =
+        `<tr><td colspan="5" style="color:var(--red);text-align:center">Gagal memuat: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function initStok() {
+    const pid = Number(document.getElementById('s-product-id').value);
+    const qty = Number(document.getElementById('s-quantity').value);
+    try {
+      await StockAPI.init(pid, qty);
+      closeModal('modal-init-stok');
+      showAlert('Stok berhasil diinisialisasi!', 'success');
+      loadStok();
+    } catch (e) { showAlert('Gagal: ' + e.message); }
+  }
+
+  async function restoreStok(pid) {
+    const amount = prompt('Kembalikan stok sebesar berapa?', '1');
+    if (!amount) return;
+    try {
+      await StockAPI.restore(pid, Number(amount));
+      showAlert('Stok berhasil dikembalikan!', 'success');
+      loadStok();
+    } catch (e) { showAlert('Gagal: ' + e.message); }
+  }
+
+  // ════════════ SESI LIVE ════════════
+  async function loadSesi() {
+    try {
+      const res = await LiveAPI.getSessions();
+      const list = res.data || [];
+      document.getElementById('stat-live').textContent = list.filter(s => s.status === 'live').length;
+      const grid = document.getElementById('grid-sesi');
+      if (!list.length) {
+        grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📺</div><p>Belum ada sesi siaran</p></div>';
+        return;
+      }
+      grid.innerHTML = list.map(s => `
+        <div class="card" style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>${s.title}</strong>
+            <span class="status-badge status-${s.status}">${s.status.toUpperCase()}</span>
+          </div>
+          <div style="font-size:.85rem;color:var(--gray-600)">
+            Durasi promo: ${s.promo_duration_sec}s
+            ${s.featured_product_id ? ` · Produk #${s.featured_product_id}` : ''}
+            ${s.flash_price ? ` · Kilat: ${fmt(s.flash_price)}` : ''}
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${s.status === 'scheduled' ? `<button class="btn btn-success btn-sm" onclick="updateSesiStatus(${s.id},'live')">▶ Mulai Live</button>` : ''}
+            ${s.status === 'live'      ? `<button class="btn btn-danger btn-sm" onclick="updateSesiStatus(${s.id},'ended')">⏹ Akhiri</button>
+                                          <button class="btn btn-secondary btn-sm" onclick="openFeature(${s.id})">🎯 Angkat Produk</button>` : ''}
+          </div>
+        </div>`).join('');
+    } catch (e) {
+      document.getElementById('grid-sesi').innerHTML =
+        `<div style="color:var(--red);padding:16px">Gagal memuat: ${e.message}</div>`;
+    }
+  }
+
+  async function createSesi() {
+    const body = {
+      title:              document.getElementById('sesi-title').value,
+      promo_duration_sec: Number(document.getElementById('sesi-duration').value),
+    };
+    try {
+      await LiveAPI.createSession(body);
+      closeModal('modal-sesi');
+      showAlert('Sesi berhasil dibuat!', 'success');
+      loadSesi();
+    } catch (e) { showAlert('Gagal: ' + e.message); }
+  }
+
+  async function updateSesiStatus(id, status) {
+    try {
+      await LiveAPI.updateStatus(id, status);
+      showAlert(`Sesi ${status === 'live' ? 'dimulai' : 'diakhiri'}!`, 'success');
+      loadSesi();
+    } catch (e) { showAlert('Gagal: ' + e.message); }
+  }
+
+  function openFeature(id) {
+    document.getElementById('feature-sesi-id').value = id;
+    openModal('modal-feature');
+  }
+
+  async function featureProduct() {
+    const id = document.getElementById('feature-sesi-id').value;
+    const body = {
+      featured_product_id: Number(document.getElementById('feature-product-id').value),
+      flash_price:         Number(document.getElementById('feature-flash-price').value) || null,
+      promo_duration_sec:  Number(document.getElementById('feature-duration').value),
+    };
+    try {
+      await LiveAPI.featureProduct(id, body);
+      closeModal('modal-feature');
+      showAlert('Produk berhasil diangkat ke layar!', 'success');
+      loadSesi();
+    } catch (e) { showAlert('Gagal: ' + e.message); }
+  }
+
+  // ════════════ PESANAN ════════════
+  async function loadPesanan() {
+    const status = document.getElementById('filter-status').value;
+    try {
+      const res = await OrderAPI.getAll(status || undefined);
+      const list = res.data || [];
+      document.getElementById('stat-pesanan').textContent = list.length;
+      const tbody = document.getElementById('tbody-pesanan');
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999">Tidak ada pesanan</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(o => `
+        <tr>
+          <td>#${o.id}</td>
+          <td>${o.customer_name}<br/><small style="color:#999">${o.customer_email}</small></td>
+          <td style="font-weight:700">${fmt(o.total_price)}</td>
+          <td><span class="status-badge status-${o.status}">${o.status}</span></td>
+          <td style="font-size:.8rem">${new Date(o.created_at).toLocaleString('id-ID')}</td>
+          <td style="display:flex;gap:4px;flex-wrap:wrap">
+            ${o.status === 'pending' ? `
+              <button class="btn btn-success btn-sm" onclick="updatePesanan(${o.id},'paid')">✓ Paid</button>
+              <button class="btn btn-danger btn-sm" onclick="updatePesanan(${o.id},'cancelled')">✕ Batal</button>` : ''}
+          </td>
+        </tr>`).join('');
+    } catch (e) {
+      document.getElementById('tbody-pesanan').innerHTML =
+        `<tr><td colspan="6" style="color:var(--red);text-align:center">Gagal memuat: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function updatePesanan(id, status) {
+    try {
+      await OrderAPI.updateStatus(id, status);
+      showAlert(`Pesanan #${id} diubah ke ${status}`, 'success');
+      loadPesanan();
+    } catch (e) { showAlert('Gagal: ' + e.message); }
+  }
+
+  // ── INIT ─────────────────────────────────────────────────────
+  loadProduk();
+  // refresh stats
+  Promise.allSettled([
+    OrderAPI.getAll().then(r => { document.getElementById('stat-pesanan').textContent = (r.data||[]).length; }),
+    LiveAPI.getSessions().then(r => { document.getElementById('stat-live').textContent = (r.data||[]).filter(s=>s.status==='live').length; }),
+    StockAPI.getAll().then(r => { document.getElementById('stat-stok').textContent = (r.data||[]).reduce((s,x)=>s+x.quantity,0); }),
+  ]);
+</script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pesanan Saya — Live Shopping Kosmetik</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="brand">💄 KosmetikLive <span>Pesanan Saya</span></div>
+  <div class="nav-links">
+    <a href="pelanggan.html">← Kembali Belanja</a>
+    <a href="cart.html">🛒 Keranjang</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-title">📦 Riwayat Pesanan</div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="filterStatus('')">Semua</button>
+    <button class="tab-btn" onclick="filterStatus('pending')">Pending</button>
+    <button class="tab-btn" onclick="filterStatus('paid')">Lunas</button>
+    <button class="tab-btn" onclick="filterStatus('cancelled')">Dibatalkan</button>
+  </div>
+
+  <div id="alert-area"></div>
+  <div id="orders-area">
+    <div style="text-align:center;color:#999;padding:48px">Memuat pesanan...</div>
+  </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script>
+  if (localStorage.getItem('role') !== 'pelanggan') window.location.href = '../index.html';
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+  const fmt = n => 'Rp ' + Number(n).toLocaleString('id-ID');
+
+  let currentStatus = '';
+
+  function filterStatus(status) {
+    currentStatus = status;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    loadOrders(status);
+  }
+
+  async function loadOrders(status) {
+    try {
+      const res  = await OrderAPI.getAll(status || undefined);
+      let list = res.data || [];
+
+      // Filter by pelanggan email
+      if (user.email) list = list.filter(o => o.customer_email === user.email);
+
+      const area = document.getElementById('orders-area');
+      if (!list.length) {
+        area.innerHTML = `<div class="empty-state">
+          <div class="empty-icon">📦</div>
+          <p>Belum ada pesanan${status ? ' dengan status ' + status : ''}</p>
+          <a href="pelanggan.html" class="btn btn-primary" style="margin-top:12px">Mulai Belanja</a>
+        </div>`;
+        return;
+      }
+
+      area.innerHTML = list.reverse().map(o => `
+        <div class="card" style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div>
+              <strong>Pesanan #${o.id}</strong>
+              <span style="font-size:.8rem;color:#999;margin-left:8px">${new Date(o.created_at).toLocaleString('id-ID')}</span>
+            </div>
+            <span class="status-badge status-${o.status}">${o.status}</span>
+          </div>
+          <div style="font-size:.9rem;margin-bottom:10px">
+            ${(o.items||[]).map(i => `
+              <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--gray-200)">
+                <span>${i.name} ×${i.qty}</span>
+                <span>${fmt(i.unit_price * i.qty)}</span>
+              </div>`).join('')}
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:700;color:var(--pink-dark);font-size:1.05rem">Total: ${fmt(o.total_price)}</span>
+            ${o.status === 'pending'
+              ? `<button class="btn btn-danger btn-sm" onclick="cancelOrder(${o.id})">Batalkan Pesanan</button>`
+              : ''}
+          </div>
+        </div>`).join('');
+    } catch (e) {
+      document.getElementById('orders-area').innerHTML =
+        `<div class="alert alert-error">Gagal memuat pesanan: ${e.message}<br/><small>Pastikan order-service berjalan di port 3007.</small></div>`;
+    }
+  }
+
+  async function cancelOrder(id) {
+    if (!confirm('Batalkan pesanan ini? Stok akan dikembalikan secara otomatis.')) return;
+    try {
+      await OrderAPI.updateStatus(id, 'cancelled');
+      document.getElementById('alert-area').innerHTML =
+        '<div class="alert alert-success">Pesanan dibatalkan. Stok telah dikembalikan.</div>';
+      setTimeout(() => document.getElementById('alert-area').innerHTML = '', 4000);
+      loadOrders(currentStatus);
+    } catch (e) {
+      document.getElementById('alert-area').innerHTML =
+        `<div class="alert alert-error">Gagal membatalkan: ${e.message}</div>`;
+    }
+  }
+
+  loadOrders('');
+</script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — Live Shopping Kosmetik</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="login-logo">💄</div>
+      <div class="login-title">Live Shopping Kosmetik</div>
+      <div class="login-subtitle">Kelompok 6 — Praktikum Scalable Systems</div>
+
+      <!-- Toggle Admin / Pelanggan -->
+      <div class="login-toggle">
+        <button class="active" id="btn-pelanggan" onclick="setRole('pelanggan')">💄 Pelanggan</button>
+        <button id="btn-admin" onclick="setRole('admin')">🏢 Admin</button>
+      </div>
+
+      <div id="alert-area"></div>
+
+      <form id="login-form" onsubmit="doLogin(event)">
+        <!-- Pelanggan: email + password -->
+        <div id="field-email" class="form-group">
+          <label>Email</label>
+          <input type="email" id="email" placeholder="siti@example.com" required />
+        </div>
+        <!-- Admin: username + password -->
+        <div id="field-username" class="form-group" style="display:none">
+          <label>Username</label>
+          <input type="text" id="username" placeholder="admin" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="password" placeholder="••••••••" required />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:4px" id="btn-login">
+          Masuk sebagai Pelanggan
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let currentRole = 'pelanggan';
+
+    function setRole(role) {
+      currentRole = role;
+      document.getElementById('btn-pelanggan').classList.toggle('active', role === 'pelanggan');
+      document.getElementById('btn-admin').classList.toggle('active', role === 'admin');
+      document.getElementById('field-email').style.display    = role === 'pelanggan' ? '' : 'none';
+      document.getElementById('field-username').style.display = role === 'admin'     ? '' : 'none';
+      document.getElementById('email').required    = role === 'pelanggan';
+      document.getElementById('username').required = role === 'admin';
+      document.getElementById('btn-login').textContent =
+        role === 'admin' ? 'Masuk sebagai Admin' : 'Masuk sebagai Pelanggan';
+      document.getElementById('alert-area').innerHTML = '';
+    }
+
+    function showAlert(msg, type = 'error') {
+      document.getElementById('alert-area').innerHTML =
+        `<div class="alert alert-${type}">${msg}</div>`;
+    }
+
+    function doLogin(e) {
+      e.preventDefault();
+      const password = document.getElementById('password').value;
+
+      if (currentRole === 'admin') {
+        const username = document.getElementById('username').value;
+        // Simulasi validasi admin (hardcoded — sesuai arsitektur: login admin lokal)
+        if (username === 'admin' && password === 'admin123') {
+          localStorage.setItem('role', 'admin');
+          localStorage.setItem('user', JSON.stringify({ name: 'Admin Stok', role: 'admin' }));
+          window.location.href = 'pages/admin.html';
+        } else {
+          showAlert('Username atau password admin salah.');
+        }
+      } else {
+        const email = document.getElementById('email').value;
+        // Simulasi validasi pelanggan (cek format email saja)
+        if (email && password.length >= 4) {
+          const name = email.split('@')[0];
+          localStorage.setItem('role', 'pelanggan');
+          localStorage.setItem('user', JSON.stringify({ name, email, role: 'pelanggan' }));
+          window.location.href = 'pages/pelanggan.html';
+        } else {
+          showAlert('Email atau password tidak valid. Password minimal 4 karakter.');
+        }
+      }
+    }
+
+    // Auto-redirect jika sudah login
+    window.addEventListener('DOMContentLoaded', () => {
+      const role = localStorage.getItem('role');
+      if (role === 'admin') window.location.href = 'pages/admin.html';
+      else if (role === 'pelanggan') window.location.href = 'pages/pelanggan.html';
+    });
+  </script>
+</body>
+</html>
