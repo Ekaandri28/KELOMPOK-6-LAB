@@ -87,6 +87,11 @@
         <span class="label">Status</span>
         <span class="value"><span class="status-badge status-${order.status}">${order.status}</span></span>
       </div>
+      ${order.payment_method ? `
+      <div class="order-row">
+        <span class="label">Metode Bayar</span>
+        <span class="value">✅ ${order.payment_method}</span>
+      </div>` : ''}
       <div style="margin:12px 0;font-weight:700;font-size:.9rem">Produk Dipesan:</div>
       ${items.map(i => `
         <div class="order-row">

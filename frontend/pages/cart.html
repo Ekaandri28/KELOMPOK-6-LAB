@@ -68,7 +68,8 @@
           Bayar Sekarang
         </button>
         <div id="checkout-loading" style="display:none;text-align:center;padding:12px;color:var(--gray-600)">
-          ⏳ Memproses pesanan, mohon tunggu...
+          <div style="margin-bottom:6px">⏳ Memproses pembayaran...</div>
+          <div style="font-size:.8rem;color:var(--gray-500)">Sistem sedang memeriksa stok & menghubungi payment gateway</div>
         </div>
       </div>
     </div>
@@ -200,32 +201,66 @@
     };
 
     try {
-      // Simulasi proses pembayaran (delay 1.5 detik)
+      // ── Simulasi Proses Payment Gateway ──────────────────────
+      // Sesuai diagram: "Kirim Permintaan ke Payment Gateway (Opsi Bank/Dompet)"
+      showAlert('⏳ Menghubungi payment gateway...', 'info');
       await new Promise(r => setTimeout(r, 1500));
 
-      // Panggil order-service
-      const res = await OrderAPI.create(body);
+      // Simulasi hasil pembayaran — 95% sukses, 5% gagal (simulasi jaringan)
+      const paymentMethod = document.getElementById('payment-method').value;
+      const paymentSuccess = Math.random() > 0.05; // 95% sukses
+
+      if (!paymentSuccess) {
+        // Sesuai diagram: node E_Pay "Tampilkan Pembayaran Gagal"
+        throw new Error('PAYMENT_FAILED');
+      }
+
+      // ── Pembayaran berhasil → Buat Pesanan & Kurangi Stok ────
+      // Sesuai diagram: "Sistem Memeriksa Ketersediaan Stok" → "Buat Pesanan & Kurangi Stok"
+      document.getElementById('alert-area').innerHTML = '';
+      const res   = await OrderAPI.create(body);
       const order = res.data;
 
       // Simpan last order untuk halaman konfirmasi
-      localStorage.setItem('last_order', JSON.stringify(order));
-      // Kosongkan keranjang
+      localStorage.setItem('last_order', JSON.stringify({ ...order, payment_method: paymentMethod }));
       localStorage.removeItem('cart');
 
       // Redirect ke halaman konfirmasi
       window.location.href = 'konfirmasi.html';
 
     } catch (e) {
-      document.getElementById('btn-checkout').style.display    = '';
+      document.getElementById('btn-checkout').style.display     = '';
       document.getElementById('checkout-loading').style.display = 'none';
 
-      if (e.message.includes('Stok') || e.message.includes('409') || e.message.includes('stok')) {
-        showAlert('❌ Stok tidak mencukupi untuk salah satu produk. Silakan periksa keranjang kamu.');
-      } else if (e.message.includes('tidak ditemukan') || e.message.includes('404')) {
-        showAlert('❌ Salah satu produk tidak ditemukan. Mungkin sudah dihapus.');
-      } else {
-        showAlert('❌ Gagal membuat pesanan: ' + e.message + '<br/><small>Pastikan semua service berjalan.</small>');
+      // ── Sesuai diagram: node E_Pay — Pembayaran Gagal ────────
+      if (e.message === 'PAYMENT_FAILED') {
+        showAlert(`
+          <strong>💳 Pembayaran Gagal</strong><br/>
+          Transaksi melalui <em>${document.getElementById('payment-method').value}</em> tidak berhasil diproses.<br/>
+          <small>Silakan coba metode pembayaran lain atau ulangi beberapa saat lagi.</small>
+        `);
+        return;
       }
+
+      // ── Sesuai diagram: node E_Stock — Stok Habis ────────────
+      const errMsg = e.message || '';
+      const errCode = e.code || '';
+      if (errMsg.includes('STOK_HABIS') || errCode === 'STOK_HABIS' ||
+          errMsg.includes('409') || errMsg.toLowerCase().includes('stok')) {
+        showAlert(`
+          <strong>📦 Pesanan Dibatalkan — Stok Habis</strong><br/>
+          Stok untuk salah satu produk di keranjang kamu sudah habis.<br/>
+          <small>Produk mungkin baru saja terjual saat flash sale. Silakan hapus produk tersebut dari keranjang.</small>
+        `);
+        return;
+      }
+
+      if (errMsg.includes('PRODUK_TIDAK_ADA') || errMsg.includes('404')) {
+        showAlert('❌ Salah satu produk tidak ditemukan. Mungkin sudah dihapus admin.');
+        return;
+      }
+
+      showAlert('❌ Gagal membuat pesanan: ' + errMsg + '<br/><small>Pastikan semua service berjalan.</small>');
     }
   }
 
