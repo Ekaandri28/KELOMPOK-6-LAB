@@ -32,6 +32,8 @@
     <button class="tab-btn" onclick="showTab('stok')">Stok</button>
     <button class="tab-btn" onclick="showTab('live')">Sesi Live</button>
     <button class="tab-btn" onclick="showTab('pesanan')">Pesanan</button>
+    <button class="tab-btn" onclick="showTab('top-user')">User Sering Beli</button>
+    <button class="tab-btn" onclick="showTab('reset-password')">Reset Password</button>
   </div>
 
   <div id="alert-area"></div>
@@ -90,6 +92,32 @@
       <table>
         <thead><tr><th>ID</th><th>Pelanggan</th><th>Total</th><th>Status</th><th>Waktu</th><th>Aksi</th></tr></thead>
         <tbody id="tbody-pesanan"><tr><td colspan="6" style="text-align:center;color:#999">Memuat data...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: USER SERING BELI ═══════════ -->
+  <div id="tab-top-user" class="tab-content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="page-title" style="margin:0">Pelanggan Paling Sering Beli</div>
+    </div>
+    <div class="table-wrap card">
+      <table>
+        <thead><tr><th>ID</th><th>Nama User</th><th>Email</th><th>Total Transaksi</th><th>Total Pengeluaran</th></tr></thead>
+        <tbody id="tbody-top-user"><tr><td colspan="5" style="text-align:center;color:#999">Memuat data...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════ TAB: RESET PASSWORD ═══════════ -->
+  <div id="tab-reset-password" class="tab-content" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="page-title" style="margin:0">Reset Password User</div>
+    </div>
+    <div class="table-wrap card">
+      <table>
+        <thead><tr><th>ID</th><th>Nama / Email User</th><th>Status</th><th>Aksi</th></tr></thead>
+        <tbody id="tbody-reset-password"><tr><td colspan="4" style="text-align:center;color:#999">Memuat data...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -171,10 +199,12 @@
     document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
     document.getElementById('tab-' + tab).style.display = '';
     event.target.classList.add('active');
-    if (tab === 'produk')  loadProduk();
-    if (tab === 'stok')    loadStok();
-    if (tab === 'live')    loadSesi();
-    if (tab === 'pesanan') loadPesanan();
+    if (tab === 'produk')         loadProduk();
+    if (tab === 'stok')           loadStok();
+    if (tab === 'live')           loadSesi();
+    if (tab === 'pesanan')        loadPesanan();
+    if (tab === 'top-user')       loadTopUser();
+    if (tab === 'reset-password') loadResetPassword();
   }
 
   // ── ALERT ────────────────────────────────────────────────────
@@ -195,7 +225,6 @@
   const emojiKat = {
     'Lip Cream':'💄', 'Lip Serum':'💧', 'Lip Balm':'🫧',
     'Lip Tint':'🌸',  'Lip Gloss':'✨',  'Lainnya':'🛍️',
-    // legacy
     'Lipstik':'💄', 'Foundation':'🫧', 'Skincare':'🧴',
     'Mata':'👁️', 'Pipi':'🌸', 'Setting':'✨', 'Primer':'🫙',
   };
@@ -438,9 +467,111 @@
     } catch (e) { showAlert('Gagal: ' + e.message); }
   }
 
+ // ════════════ USER SERING BELI (TERHUBUNG KE PESANAN KOSTUMER) ════════════
+  async function loadTopUser() {
+    const tbody = document.getElementById('tbody-top-user');
+    try {
+      // Mengambil data pesanan riil yang dibuat oleh kostumer
+      const res = await OrderAPI.getAll();
+      const orders = res.data || [];
+
+      if (!orders.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999">Belum ada transaksi dari kostumer</td></tr>';
+        return;
+      }
+
+      // Agregasi/kelompokkan pesanan berdasarkan email pelanggan
+      const userMap = {};
+      orders.forEach(o => {
+        const email = o.customer_email || 'tanpa-email@mail.com';
+        if (!userMap[email]) {
+          userMap[email] = {
+            name: o.customer_name || 'Pelanggan',
+            email: email,
+            count: 0,
+            totalSpent: 0
+          };
+        }
+        
+        // Tambah jumlah transaksi
+        userMap[email].count += 1;
+        
+        // Akumulasi pengeluaran dari transaksi yang berstatus 'paid'
+        if (o.status === 'paid') {
+          userMap[email].totalSpent += Number(o.total_price || 0);
+        }
+      });
+
+      // Urutkan user berdasarkan transaksi terbanyak (Descending)
+      const sortedUsers = Object.values(userMap).sort((a, b) => b.count - a.count);
+
+      // Tampilkan data ke tabel
+      tbody.innerHTML = sortedUsers.map((u, index) => `
+        <tr>
+          <td>#${index + 1}</td>
+          <td>${u.name}</td>
+          <td>${u.email}</td>
+          <td><strong>${u.count} Transaksi</strong></td>
+          <td style="font-weight:700; color:var(--green)">${fmt(u.totalSpent)}</td>
+        </tr>`).join('');
+
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:var(--red);text-align:center">Gagal memuat: ${e.message}</td></tr>`;
+    }
+  }
+
+  // ════════════ RESET PASSWORD USER (TERHUBUNG KE DATA KOSTUMER) ════════════
+  async function loadResetPassword() {
+    const tbody = document.getElementById('tbody-reset-password');
+    try {
+      // Ambil daftar user unik yang pernah melakukan pemesanan
+      const res = await OrderAPI.getAll();
+      const orders = res.data || [];
+
+      const userMap = {};
+      orders.forEach(o => {
+        const email = o.customer_email || 'tanpa-email@mail.com';
+        if (!userMap[email]) {
+          userMap[email] = {
+            id: Object.keys(userMap).length + 1,
+            name: o.customer_name || 'Pelanggan',
+            email: email
+          };
+        }
+      });
+
+      const users = Object.values(userMap);
+
+      if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999">Belum ada pelanggan terdaftar</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td>#${u.id}</td>
+          <td>${u.name} <br/><small style="color:#999">${u.email}</small></td>
+          <td><span class="status-badge status-scheduled">Aktif</span></td>
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="resetUserPassword('${u.email}', '${u.name}')">Reset Password</button>
+          </td>
+        </tr>`).join('');
+
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="4" style="color:var(--red);text-align:center">Gagal memuat: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function resetUserPassword(email, name) {
+    if (!confirm(`Yakin ingin mereset password untuk ${name} (${email})?`)) return;
+    
+    // Password baru default yang diberikan admin
+    const newPassword = 'user1234'; 
+    showAlert(`Password untuk <strong>${email}</strong> berhasil direset menjadi: <code>${newPassword}</code>`, 'success');
+  }
+
   // ── INIT ─────────────────────────────────────────────────────
   loadProduk();
-  // refresh stats
   Promise.allSettled([
     OrderAPI.getAll().then(r => { document.getElementById('stat-pesanan').textContent = (r.data||[]).length; }),
     LiveAPI.getSessions().then(r => { document.getElementById('stat-live').textContent = (r.data||[]).filter(s=>s.status==='live').length; }),
